@@ -145,6 +145,10 @@ export class TruthBear implements INodeType {
 				const v = this.getNodeParameter(arg, i, '') as string;
 				if (v) qs[arg] = v;
 			}
+			// Query parameters this operation always sends, whatever the user filled in. Find Signal
+			// uses it to ask for the compact form: the un-summarised coverage listing is about 5.4 MB,
+			// which does not match what this operation says it returns and cannot fit in an agent.
+			Object.assign(qs, spec.fixed ?? {});
 
 			try {
 				// returnFullResponse + ignoreHttpStatusErrors on purpose: this service answers 402 with a
@@ -189,8 +193,8 @@ export class TruthBear implements INodeType {
 	}
 }
 
-const OPERATIONS: Record<string, { path: string; args: string[] }> = {
+const OPERATIONS: Record<string, { path: string; args: string[]; fixed?: Record<string, string> }> = {
 	verifyCitation: { path: "/gauge/verify", args: ["record_hash"] },
-	findSignal: { path: "/gauge/coverage", args: ["industry","signal_id","entity"] },
+	findSignal: { path: "/gauge/coverage", args: ["industry","signal_id","entity"], fixed: {"summary":"1"} },
 	getPriceQuote: { path: "/gauge", args: ["signal_id","entity"] },
 };

@@ -181,13 +181,43 @@ export function truthBearTools(opts: TruthBearOptions = {}) {
         industry: z.string().optional().describe('Narrow to one industry, optional.'),
         signal_id: z.string().optional().describe('Narrow to one signal line, optional.'),
         entity: z.string().optional().describe('Check whether one specific entity is covered, optional.'),
-        full: z.string().optional().describe('Set to "1" for the full listing instead of a summary.'),
+        full: z
+          .boolean()
+          .optional()
+          .describe(
+            'true = per-entity detail (what each line measures, its cadence, whether it is currently '
+            + 'sellable) instead of counts only. Requires industry or signal_id: the un-narrowed detail '
+            + 'listing is far too large to put in a model context.',
+          ),
       }),
-      execute: async (args) => {
-        const res = await doFetch(`${base}/gauge/coverage${qs(args as Record<string, string>)}`, {
-          method: 'GET',
-        });
-        return json(res);
+      execute: async ({ industry, signal_id, entity, full }) => {
+        // ★ Why this is not a straight pass-through (measured against production, 2026-08-20):
+        //   this tool talks to the REST endpoint, and GET /gauge/coverage with no `summary=1`
+        //   returns 5.4 MB — roughly 1.37 MILLION tokens. Every argument here is optional, so a
+        //   model will call it with none, and that single call exceeds the context window of every
+        //   model this SDK can be used with.
+        //   The compact form has existed the whole time (`summary=1`, 59 KB ≈ 14k tokens) and the
+        //   service's own MCP surface has always defaulted to it. This artifact simply never asked.
+        //   ⇒ Compact is the default here too. Detail stays available, but only once the request is
+        //     narrowed enough for the answer to fit — and when it is not, we say so rather than
+        //     quietly returning something other than what was asked for.
+        const narrowed = Boolean(industry || signal_id);
+        const params: Record<string, string | undefined> = { industry, signal_id, entity };
+        if (!(full === true && narrowed)) params.summary = '1';
+
+        const res = await doFetch(`${base}/gauge/coverage${qs(params)}`, { method: 'GET' });
+        const body = await json(res);
+
+        if (full === true && !narrowed) {
+          return {
+            ...body,
+            _truthbear_note:
+              'Returned the compact summary, not the full detail you asked for: un-narrowed detail is '
+              + 'about 5.4 MB and would not fit in a model context. Pass industry or signal_id together '
+              + 'with full to get it.',
+          };
+        }
+        return body;
       },
     }),
 

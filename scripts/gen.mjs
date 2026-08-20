@@ -293,7 +293,35 @@ class TruthBearProvider(ToolProvider):
         return None
 `);
 
-const difyToolPy = (name, cls, path, argNames, paid) => header('py') + `
+// ★2026-08-20 對產線量過:這些產物打的是 REST /gauge/coverage,而它【不帶 summary=1 就回 5.4 MB】
+//   (≈137 萬 tokens)。find_signal 每個參數都是選填 ⇒ 模型一定會不帶參數呼叫,
+//   而那一次呼叫就超過所有模型的 context 上限。
+//   ★病【不在】產線 MCP 伺服器:它不帶參數只回 147 KB,宣告的「預設 compact summary」是兌現的。
+//     缺的是這幾個產物從來沒去要那個 compact 形式。
+//   ⇒ 預設送 summary=1;full 仍然拿得到,但要先收斂(industry 或 signal_id),
+//     沒收斂就降級【並講出來】,不默默回一個跟人家要的不一樣的東西。
+const COVERAGE_PRELUDE_PY = `        industry = tool_parameters.get("industry")
+        signal_id = tool_parameters.get("signal_id")
+        entity = tool_parameters.get("entity")
+        full = tool_parameters.get("full")
+        narrowed = bool(industry or signal_id)
+        params = {"industry": industry, "signal_id": signal_id, "entity": entity}
+        if not (full and narrowed):
+            # Un-narrowed detail is about 5.4 MB and does not fit in a model context.
+            params["summary"] = "1"
+`;
+
+const COVERAGE_TAIL_PY = `        if full and not narrowed:
+            body = dict(body)
+            body["_truthbear_note"] = (
+                "Returned the compact summary, not the full detail you asked for: un-narrowed "
+                "detail is about 5.4 MB and would not fit in a model context. Pass industry or "
+                "signal_id together with full to get it."
+            )
+
+`;
+
+const difyToolPy = (name, cls, path, argNames, paid, extra = {}) => header('py') + `
 from collections.abc import Generator
 from typing import Any
 
@@ -306,9 +334,9 @@ from tools._http import call
 
 class ${cls}(Tool):
     def _invoke(self, tool_parameters: dict[str, Any]) -> Generator[ToolInvokeMessage, None, None]:
-        status, body = call(
+${extra.prelude || ''}        status, body = call(
             "${path}",
-            {${argNames.map((a) => `"${a}": tool_parameters.get("${a}")`).join(', ')}},
+            ${extra.argsExpr || `{${argNames.map((a) => `"${a}": tool_parameters.get("${a}")`).join(', ')}}`},
         )
 ${paid ? `
         if status == 402:
@@ -333,13 +361,14 @@ ${paid ? `
             yield self.create_json_message({"status": status, **body})
             return
 
-        yield self.create_json_message(body)
+${extra.tail || ''}        yield self.create_json_message(body)
 `;
 
 emit('dify/tools/verify_citation.py',
   difyToolPy('verify_citation', 'VerifyCitationTool', '/gauge/verify', ['record_hash'], false));
 emit('dify/tools/find_signal.py',
-  difyToolPy('find_signal', 'FindSignalTool', '/gauge/coverage', ['industry', 'signal_id', 'entity', 'full'], false));
+  difyToolPy('find_signal', 'FindSignalTool', '/gauge/coverage', ['industry', 'signal_id', 'entity', 'full'], false,
+    { prelude: COVERAGE_PRELUDE_PY, argsExpr: 'params', tail: COVERAGE_TAIL_PY }));
 emit('dify/tools/get_official_record.py',
   difyToolPy('get_official_record', 'GetOfficialRecordTool', '/gauge', ['signal_id', 'entity', 'dim'], true));
 
@@ -410,7 +439,7 @@ const N8N_NODE_DIR = '../packages/n8n-nodes-truthbear';
 
 emit(`${N8N_NODE_DIR}/package.json`, JSON.stringify({
   name: N.packageName,
-  version: '0.1.1',   // 0.1.0 發出去時沒帶 provenance,n8n 驗證要求要有 ⇒ 這一版走 OIDC 重發
+  version: '0.1.2',   // findSignal 補上 summary=1:原本回 5.4 MB,與本節點自己的說明不符
   description: 'Official-source records for AI agents: source URL, offline-recomputable record_hash, freshness and a did:key signature. Free lookups plus a live price quote; this node never pays and never takes a key.',
   license,
   homepage: humanSite,
@@ -500,8 +529,11 @@ emit(`${N8N_NODE_DIR}/nodes/TruthBear/truthbear.dark.svg`, n8nIcon('#f5f5f4', '#
 const OPS = [
   { value: 'verifyCitation', name: 'Verify Citation', path: '/gauge/verify', args: ['record_hash'],
     action: 'Verify a record hash', paid: false },
+  // ★fixed: summary=1 —— 這個節點宣告自己回的是「每條線幾個對象 + fresh/recent/stale 計數」,
+  //   而 REST /gauge/coverage 不帶 summary=1 回的是 5.4 MB 的逐對象明細,跟宣告不符也塞不進代理。
+  //   這個節點是 usableAsTool: true,所以它的輸出【會進模型 context】。⇒ 固定要 compact 形式。
   { value: 'findSignal', name: 'Find Signal', path: '/gauge/coverage', args: ['industry', 'signal_id', 'entity'],
-    action: 'Find coverage and freshness', paid: false },
+    fixed: { summary: '1' }, action: 'Find coverage and freshness', paid: false },
   { value: 'getPriceQuote', name: 'Get Price Quote', path: '/gauge', args: ['signal_id', 'entity'],
     action: 'Get the live price quote for a record', paid: true },
 ];
@@ -637,6 +669,10 @@ const nodeTs = [
   '\t\t\t\tconst v = this.getNodeParameter(arg, i, \'\') as string;',
   '\t\t\t\tif (v) qs[arg] = v;',
   '\t\t\t}',
+  '\t\t\t// Query parameters this operation always sends, whatever the user filled in. Find Signal',
+  '\t\t\t// uses it to ask for the compact form: the un-summarised coverage listing is about 5.4 MB,',
+  '\t\t\t// which does not match what this operation says it returns and cannot fit in an agent.',
+  '\t\t\tObject.assign(qs, spec.fixed ?? {});',
   '',
   '\t\t\ttry {',
   '\t\t\t\t// returnFullResponse + ignoreHttpStatusErrors on purpose: this service answers 402 with a',
@@ -681,8 +717,8 @@ const nodeTs = [
   '\t}',
   '}',
   '',
-  'const OPERATIONS: Record<string, { path: string; args: string[] }> = {',
-  ...OPS.map((o) => `\t${o.value}: { path: ${JSON.stringify(o.path)}, args: ${JSON.stringify(o.args)} },`),
+  'const OPERATIONS: Record<string, { path: string; args: string[]; fixed?: Record<string, string> }> = {',
+  ...OPS.map((o) => `\t${o.value}: { path: ${JSON.stringify(o.path)}, args: ${JSON.stringify(o.args)}${o.fixed ? `, fixed: ${JSON.stringify(o.fixed)}` : ''} },`),
   '};',
   '',
 ].join('\n');
@@ -779,7 +815,7 @@ export const TOOL_SNAPSHOT = ${JSON.stringify(tools.map((t) => ({ name: t.name, 
 //   ⇒ 凡是「會被發布出去、且含網址」的檔,一律進生成器。手寫就會漂。
 emit('../packages/truthbear-ai-sdk/package.json', JSON.stringify({
   name: V.packageName,
-  version: '0.1.2',   // 同上:0.1.1 是 token 發的,沒有 attestation
+  version: '0.1.3',   // 0.1.2 的 find_signal 不帶參數會回 137 萬 tokens,對模型等於不能用
   description: 'Official-source records for AI agents: source URL, an offline-recomputable record_hash, freshness and a did:key signature. Free lookups need no key; the paid tool returns a live x402 payment challenge and never charges silently.',
   keywords: ['ai-sdk', 'vercel-ai-sdk', 'tools', 'mcp', 'x402', 'official-data', 'provenance', 'verification'],
   license,

@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-truthbear",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Official-source records for AI agents: source URL, offline-recomputable record_hash, freshness and a did:key signature. Free lookups plus a live price quote; this node never pays and never takes a key.",
   "license": "MIT",
   "homepage": "https://truthbear.co",

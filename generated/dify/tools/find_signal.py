@@ -14,9 +14,18 @@ from tools._http import call
 
 class FindSignalTool(Tool):
     def _invoke(self, tool_parameters: dict[str, Any]) -> Generator[ToolInvokeMessage, None, None]:
+        industry = tool_parameters.get("industry")
+        signal_id = tool_parameters.get("signal_id")
+        entity = tool_parameters.get("entity")
+        full = tool_parameters.get("full")
+        narrowed = bool(industry or signal_id)
+        params = {"industry": industry, "signal_id": signal_id, "entity": entity}
+        if not (full and narrowed):
+            # Un-narrowed detail is about 5.4 MB and does not fit in a model context.
+            params["summary"] = "1"
         status, body = call(
             "/gauge/coverage",
-            {"industry": tool_parameters.get("industry"), "signal_id": tool_parameters.get("signal_id"), "entity": tool_parameters.get("entity"), "full": tool_parameters.get("full")},
+            params,
         )
 
         if status >= 400:
@@ -24,5 +33,13 @@ class FindSignalTool(Tool):
             # Passing that through beats replacing it with a generic error.
             yield self.create_json_message({"status": status, **body})
             return
+
+        if full and not narrowed:
+            body = dict(body)
+            body["_truthbear_note"] = (
+                "Returned the compact summary, not the full detail you asked for: un-narrowed "
+                "detail is about 5.4 MB and would not fit in a model context. Pass industry or "
+                "signal_id together with full to get it."
+            )
 
         yield self.create_json_message(body)

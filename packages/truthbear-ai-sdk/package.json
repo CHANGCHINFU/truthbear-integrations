@@ -1,6 +1,6 @@
 {
   "name": "truthbear-ai-sdk",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Official-source records for AI agents: source URL, an offline-recomputable record_hash, freshness and a did:key signature. Free lookups need no key; the paid tool returns a live x402 payment challenge and never charges silently.",
   "keywords": [
     "ai-sdk",
