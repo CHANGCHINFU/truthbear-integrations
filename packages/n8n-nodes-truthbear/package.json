@@ -26,8 +26,7 @@
     "lint": "n8n-node lint",
     "lint:fix": "n8n-node lint --fix",
     "scan": "npx -y @n8n/scan-community-package .",
-    "release": "n8n-node release",
-    "prepublishOnly": "n8n-node prerelease"
+    "release": "n8n-node release"
   },
   "files": [
     "dist"

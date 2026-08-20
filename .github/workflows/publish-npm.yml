@@ -101,6 +101,22 @@ jobs:
           fi
           echo "Version matches: $HAVE"
 
-      - name: Publish with provenance
+      # Two ways in, and the job works with either:
+      #
+      #   Trusted publishing (preferred). Once a trusted publisher is configured for the package
+      #   on npmjs.com, the OIDC token above is used automatically and provenance is generated
+      #   without any flag. No secret is involved.
+      #
+      #   NPM_TOKEN (bootstrap only). A package cannot have a trusted publisher until it exists,
+      #   and it cannot exist until something publishes it first. So the very first release uses
+      #   a granular token from repository secrets. Delete that secret once the trusted publisher
+      #   is in place - npm's own migration guidance is: token first, verify, then revoke.
+      #
+      # Publishing from a laptop is deliberately not an option here: this account carries a
+      # security key and no authenticator app, so npm demands an interactive step-up that a
+      # non-interactive shell cannot satisfy.
+      - name: Publish
         working-directory: packages/${{ steps.pick.outputs.pkg }}
-        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public

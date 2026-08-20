@@ -424,7 +424,11 @@ emit(`${N8N_NODE_DIR}/package.json`, JSON.stringify({
     'lint:fix': 'n8n-node lint --fix',
     scan: 'npx -y @n8n/scan-community-package .',
     release: 'n8n-node release',
-    prepublishOnly: 'n8n-node prerelease',
+    // ★刻意不放 prepublishOnly。官方 starter 的那一行是 `n8n-node prerelease`,
+    //   它的作用是【擋住直接 npm publish、要你改走互動式的 n8n-node release】。
+    //   而我方的發布路徑是 GitHub Actions(不互動),那個守衛在 CI 裡只會讓 job 失敗。
+    //   它也不在官方驗證規則的必要項裡(no-forbidden-lifecycle-scripts 禁的是
+    //   prepare/preinstall/postinstall,不含 prepublishOnly)。
   },
   files: ['dist'],
   n8n: {
