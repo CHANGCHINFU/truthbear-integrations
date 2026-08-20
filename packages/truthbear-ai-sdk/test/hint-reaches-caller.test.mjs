@@ -55,9 +55,19 @@ test('a plain fetch gets the challenge as data and is never charged silently', {
   assert.equal(out.record_hash, undefined, 'a record_hash without payment would be a free leak');
 });
 
-test('the free tools work without a wallet', { skip: !LIVE && 'offline' }, async () => {
+// ★2026-08-20: this test used to be called "the free tools work without a wallet" while calling
+//   only ONE of the two free tools, and its only assertion was that an object came back - which an
+//   HTTP 400 error body also satisfies. verify_citation was broken for every published version and
+//   this test sat next to it, green, with a name that claimed to cover it.
+//   A test whose name claims more than it checks is worse than no test: it makes the gap look
+//   covered. The verdict-level checks for verify_citation now live in
+//   verify-actually-verifies.test.mjs; this one is renamed to what it actually does.
+test('find_signal returns real data without a wallet', { skip: !LIVE && 'offline' }, async () => {
   const tools = truthBearTools();
   const out = await tools.find_signal.execute({});
   assert.ok(out && typeof out === 'object', 'find_signal should return an object');
   assert.equal(out._status, undefined, `find_signal should not return a non-JSON body: ${JSON.stringify(out).slice(0, 200)}`);
+  // Assert it answered the question, not merely that it answered.
+  assert.ok(Array.isArray(out.signals) && out.signals.length > 0,
+    `find_signal should list signal lines, got keys: ${Object.keys(out).join(', ')}`);
 });

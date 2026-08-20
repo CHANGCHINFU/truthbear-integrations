@@ -99,6 +99,17 @@ const json = async (res: Response) => {
   }
 };
 
+/**
+ * ★ Every request must say it wants JSON.
+ *
+ * Measured against production on 2026-08-20: `/gauge/verify` content-negotiates. Without an
+ * `accept` header it serves the HUMAN page - a full HTML document titled "Truth Bear - Verify
+ * record_hash". This package was sending no accept header at all, so `verify_citation` handed the
+ * model a web page instead of a verdict. It looked like it returned "something", which is exactly
+ * why the old test (`assert.ok(out && typeof out === 'object')`) stayed green over it.
+ */
+const GET: RequestInit = { method: 'GET', headers: { accept: 'application/json' } };
+
 const qs = (params: Record<string, string | undefined>) => {
   const u = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v != null && v !== '') u.set(k, v);
@@ -116,7 +127,7 @@ const qs = (params: Record<string, string | undefined>) => {
  */
 async function readChallenge(url: string, existing?: Response): Promise<any> {
   try {
-    const res = existing ?? (await fetch(url, { method: 'GET' }));
+    const res = existing ?? (await fetch(url, GET));
     return await json(res);
   } catch {
     return null;
@@ -167,7 +178,15 @@ export function truthBearTools(opts: TruthBearOptions = {}) {
           .describe('The record_hash to check, for example "sha256:16ecbf84…".'),
       }),
       execute: async ({ record_hash }) => {
-        const res = await doFetch(`${base}/gauge/verify${qs({ record_hash })}`, { method: 'GET' });
+        // ★ The query parameter is `hash`, not `record_hash` (measured against production,
+        //   2026-08-20). `record_hash` is what the service's MCP tool surface calls this input,
+        //   and the MCP server maps it to `hash` before calling the REST endpoint. This artifact
+        //   talks to REST directly, so it has to do that mapping itself - and it did not:
+        //   every call went out as `?record_hash=` and came back HTTP 400 "missing ?hash=".
+        //   The tool had never once verified anything.
+        //   The input keeps the name `record_hash` so the tool surface stays consistent with the
+        //   MCP one; only the wire format differs.
+        const res = await doFetch(`${base}/gauge/verify${qs({ hash: record_hash })}`, GET);
         return json(res);
       },
     }),
@@ -205,7 +224,7 @@ export function truthBearTools(opts: TruthBearOptions = {}) {
         const params: Record<string, string | undefined> = { industry, signal_id, entity };
         if (!(full === true && narrowed)) params.summary = '1';
 
-        const res = await doFetch(`${base}/gauge/coverage${qs(params)}`, { method: 'GET' });
+        const res = await doFetch(`${base}/gauge/coverage${qs(params)}`, GET);
         const body = await json(res);
 
         if (full === true && !narrowed) {
@@ -239,7 +258,7 @@ export function truthBearTools(opts: TruthBearOptions = {}) {
         const url = `${base}/gauge${qs({ signal_id, entity, dim })}`;
         let res: Response;
         try {
-          res = await doFetch(url, { method: 'GET' });
+          res = await doFetch(url, GET);
         } catch (err) {
           // ★ Why this catch exists (measured, 2026-08-20):
           //   Payment clients enforce a per-call ceiling LOCALLY. `x402-fetch` at its default

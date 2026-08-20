@@ -143,7 +143,10 @@ export class TruthBear implements INodeType {
 			const qs: Record<string, string> = {};
 			for (const arg of spec.args) {
 				const v = this.getNodeParameter(arg, i, '') as string;
-				if (v) qs[arg] = v;
+				// The name a parameter has in the UI is not always the name the service expects on
+				// the wire: Verify Citation takes `record_hash` (matching the service's MCP tool
+				// surface) but the REST endpoint reads it as `hash`.
+				if (v) qs[spec.rename?.[arg] ?? arg] = v;
 			}
 			// Query parameters this operation always sends, whatever the user filled in. Find Signal
 			// uses it to ask for the compact form: the un-summarised coverage listing is about 5.4 MB,
@@ -193,8 +196,8 @@ export class TruthBear implements INodeType {
 	}
 }
 
-const OPERATIONS: Record<string, { path: string; args: string[]; fixed?: Record<string, string> }> = {
-	verifyCitation: { path: "/gauge/verify", args: ["record_hash"] },
+const OPERATIONS: Record<string, { path: string; args: string[]; fixed?: Record<string, string>; rename?: Record<string, string> }> = {
+	verifyCitation: { path: "/gauge/verify", args: ["record_hash"], rename: {"record_hash":"hash"} },
 	findSignal: { path: "/gauge/coverage", args: ["industry","signal_id","entity"], fixed: {"summary":"1"} },
 	getPriceQuote: { path: "/gauge", args: ["signal_id","entity"] },
 };

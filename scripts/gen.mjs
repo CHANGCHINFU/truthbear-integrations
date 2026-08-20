@@ -364,8 +364,10 @@ ${paid ? `
 ${extra.tail || ''}        yield self.create_json_message(body)
 `;
 
+// ★同上:REST 端點讀的是 `hash`,而使用者／模型看到的參數名維持 `record_hash`(與 MCP 面一致)。
 emit('dify/tools/verify_citation.py',
-  difyToolPy('verify_citation', 'VerifyCitationTool', '/gauge/verify', ['record_hash'], false));
+  difyToolPy('verify_citation', 'VerifyCitationTool', '/gauge/verify', ['record_hash'], false,
+    { argsExpr: '{"hash": tool_parameters.get("record_hash")}' }));
 emit('dify/tools/find_signal.py',
   difyToolPy('find_signal', 'FindSignalTool', '/gauge/coverage', ['industry', 'signal_id', 'entity', 'full'], false,
     { prelude: COVERAGE_PRELUDE_PY, argsExpr: 'params', tail: COVERAGE_TAIL_PY }));
@@ -439,7 +441,7 @@ const N8N_NODE_DIR = '../packages/n8n-nodes-truthbear';
 
 emit(`${N8N_NODE_DIR}/package.json`, JSON.stringify({
   name: N.packageName,
-  version: '0.1.2',   // findSignal 補上 summary=1:原本回 5.4 MB,與本節點自己的說明不符
+  version: '0.1.3',   // 同上:verifyCitation 的查詢參數要送 hash 不是 record_hash
   description: 'Official-source records for AI agents: source URL, offline-recomputable record_hash, freshness and a did:key signature. Free lookups plus a live price quote; this node never pays and never takes a key.',
   license,
   homepage: humanSite,
@@ -527,8 +529,14 @@ emit(`${N8N_NODE_DIR}/nodes/TruthBear/truthbear.svg`, n8nIcon('#111827', '#f5f5f
 emit(`${N8N_NODE_DIR}/nodes/TruthBear/truthbear.dark.svg`, n8nIcon('#f5f5f4', '#111827'));
 
 const OPS = [
+  // ★rename —— 這個端點的查詢參數叫 `hash`,不是 `record_hash`(2026-08-20 對產線量到)。
+  //   `record_hash` 是【MCP 工具面】的輸入名,MCP 伺服器會在打 REST 前把它換成 `hash`。
+  //   這些產物直接打 REST,就得自己做這個轉換 —— 而它們沒做,
+  //   所以每一次呼叫都是 `?record_hash=` → HTTP 400「missing ?hash=」。
+  //   ⇒ verify 這個操作【從發布以來一次都沒有成功過】。
+  //   使用者看到的參數名維持 `record_hash`(與 MCP 面一致),只有送出去的線上格式不同。
   { value: 'verifyCitation', name: 'Verify Citation', path: '/gauge/verify', args: ['record_hash'],
-    action: 'Verify a record hash', paid: false },
+    rename: { record_hash: 'hash' }, action: 'Verify a record hash', paid: false },
   // ★fixed: summary=1 —— 這個節點宣告自己回的是「每條線幾個對象 + fresh/recent/stale 計數」,
   //   而 REST /gauge/coverage 不帶 summary=1 回的是 5.4 MB 的逐對象明細,跟宣告不符也塞不進代理。
   //   這個節點是 usableAsTool: true,所以它的輸出【會進模型 context】。⇒ 固定要 compact 形式。
@@ -667,7 +675,10 @@ const nodeTs = [
   '\t\t\tconst qs: Record<string, string> = {};',
   '\t\t\tfor (const arg of spec.args) {',
   '\t\t\t\tconst v = this.getNodeParameter(arg, i, \'\') as string;',
-  '\t\t\t\tif (v) qs[arg] = v;',
+  '\t\t\t\t// The name a parameter has in the UI is not always the name the service expects on',
+  '\t\t\t\t// the wire: Verify Citation takes `record_hash` (matching the service\'s MCP tool',
+  '\t\t\t\t// surface) but the REST endpoint reads it as `hash`.',
+  '\t\t\t\tif (v) qs[spec.rename?.[arg] ?? arg] = v;',
   '\t\t\t}',
   '\t\t\t// Query parameters this operation always sends, whatever the user filled in. Find Signal',
   '\t\t\t// uses it to ask for the compact form: the un-summarised coverage listing is about 5.4 MB,',
@@ -717,8 +728,8 @@ const nodeTs = [
   '\t}',
   '}',
   '',
-  'const OPERATIONS: Record<string, { path: string; args: string[]; fixed?: Record<string, string> }> = {',
-  ...OPS.map((o) => `\t${o.value}: { path: ${JSON.stringify(o.path)}, args: ${JSON.stringify(o.args)}${o.fixed ? `, fixed: ${JSON.stringify(o.fixed)}` : ''} },`),
+  'const OPERATIONS: Record<string, { path: string; args: string[]; fixed?: Record<string, string>; rename?: Record<string, string> }> = {',
+  ...OPS.map((o) => `\t${o.value}: { path: ${JSON.stringify(o.path)}, args: ${JSON.stringify(o.args)}${o.fixed ? `, fixed: ${JSON.stringify(o.fixed)}` : ''}${o.rename ? `, rename: ${JSON.stringify(o.rename)}` : ''} },`),
   '};',
   '',
 ].join('\n');
@@ -815,7 +826,7 @@ export const TOOL_SNAPSHOT = ${JSON.stringify(tools.map((t) => ({ name: t.name, 
 //   ⇒ 凡是「會被發布出去、且含網址」的檔,一律進生成器。手寫就會漂。
 emit('../packages/truthbear-ai-sdk/package.json', JSON.stringify({
   name: V.packageName,
-  version: '0.1.3',   // 0.1.2 的 find_signal 不帶參數會回 137 萬 tokens,對模型等於不能用
+  version: '0.1.4',   // verify_citation 送錯參數名,從發布以來一次都沒驗證成功過
   description: 'Official-source records for AI agents: source URL, an offline-recomputable record_hash, freshness and a did:key signature. Free lookups need no key; the paid tool returns a live x402 payment challenge and never charges silently.',
   keywords: ['ai-sdk', 'vercel-ai-sdk', 'tools', 'mcp', 'x402', 'official-data', 'provenance', 'verification'],
   license,

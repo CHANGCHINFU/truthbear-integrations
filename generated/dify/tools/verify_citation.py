@@ -16,7 +16,7 @@ class VerifyCitationTool(Tool):
     def _invoke(self, tool_parameters: dict[str, Any]) -> Generator[ToolInvokeMessage, None, None]:
         status, body = call(
             "/gauge/verify",
-            {"record_hash": tool_parameters.get("record_hash")},
+            {"hash": tool_parameters.get("record_hash")},
         )
 
         if status >= 400:
