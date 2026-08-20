@@ -1,0 +1,106 @@
+# npm publish with provenance - one pipeline shared by both packages.
+#
+# Why this must run in GitHub Actions and not on a laptop:
+#   n8n's verification guidelines state that from 2026-05-01 a node submitted for verification
+#   must be published from a GitHub Action with a provenance statement; packages published from
+#   a local machine are not accepted. Provenance uses GitHub's OIDC, so no long-lived npm token
+#   is needed anywhere.
+#
+# One-time setup (npmjs.com, by the package owner):
+#   1. npmjs.com -> the package (or Access -> Trusted publisher)
+#   2. Set the trusted publisher to this repository and this workflow file (publish-npm.yml)
+#   3. After that this pipeline needs no secrets at all
+#
+# How to trigger - push a tag:
+#   truthbear-ai-sdk-v0.1.0      publishes packages/truthbear-ai-sdk
+#   n8n-nodes-truthbear-v0.1.0   publishes packages/n8n-nodes-truthbear
+#
+# This pipeline deliberately runs the gates BEFORE publishing. An npm version is immutable:
+# a mistake stays on the registry forever, so the checks belong in front of the door.
+name: publish-npm
+
+on:
+  push:
+    tags:
+      - 'truthbear-ai-sdk-v*'
+      - 'n8n-nodes-truthbear-v*'
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package directory to publish
+        required: true
+        type: choice
+        options:
+          - truthbear-ai-sdk
+          - n8n-nodes-truthbear
+
+permissions:
+  contents: read
+  id-token: write        # provenance depends on this; without it npm falls back to a long-lived token
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Resolve the target once, so the tag and the input cannot disagree later in the job.
+      - name: Resolve package
+        id: pick
+        run: |
+          if [ -n "${{ inputs.package }}" ]; then
+            PKG="${{ inputs.package }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            PKG="${TAG%-v*}"
+          fi
+          echo "pkg=$PKG" >> "$GITHUB_OUTPUT"
+          echo "Publishing: $PKG"
+
+      # Gate A: every generated file must still match the source of truth.
+      # Hand-editing anything under generated/ turns this red.
+      - name: Gate A - generated files match the source of truth
+        run: node scripts/gen.mjs --check
+
+      # Gate B: no price literal anywhere; URLs and on-chain addresses only in the source of
+      # truth and in generated files.
+      - name: Gate B - literals
+        run: node scripts/lint-no-literals.mjs
+
+      # Gate D: nothing that must not become public. Publishing cannot be undone.
+      - name: Gate D - public preflight
+        run: node scripts/preflight-public.mjs
+
+      - name: Install and build
+        working-directory: packages/${{ steps.pick.outputs.pkg }}
+        run: |
+          npm ci || npm install
+          npm run build --if-present
+
+      - name: Package contract tests
+        working-directory: packages/${{ steps.pick.outputs.pkg }}
+        run: npm test --if-present
+
+      # The tag and package.json must agree, or the registry would carry a version whose name
+      # says one thing and whose contents say another - and that cannot be withdrawn.
+      - name: Tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: packages/${{ steps.pick.outputs.pkg }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          WANT="${TAG##*-v}"
+          HAVE="$(node -p "require('./package.json').version")"
+          if [ "$WANT" != "$HAVE" ]; then
+            echo "Tag says $WANT but package.json says $HAVE - refusing to publish"
+            exit 1
+          fi
+          echo "Version matches: $HAVE"
+
+      - name: Publish with provenance
+        working-directory: packages/${{ steps.pick.outputs.pkg }}
+        run: npm publish --provenance --access public

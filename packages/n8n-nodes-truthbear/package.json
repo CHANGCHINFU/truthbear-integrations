@@ -1,0 +1,53 @@
+{
+  "name": "n8n-nodes-truthbear",
+  "version": "0.1.0",
+  "description": "Official-source records for AI agents: source URL, offline-recomputable record_hash, freshness and a did:key signature. Free lookups plus a live price quote; this node never pays and never takes a key.",
+  "license": "MIT",
+  "homepage": "https://truthbear.co",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "truthbear",
+    "official-data",
+    "provenance",
+    "verification"
+  ],
+  "author": {
+    "name": "changchinfu",
+    "email": "noreply@truthbear.co"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CHANGCHINFU/truthbear-integrations.git"
+  },
+  "scripts": {
+    "build": "n8n-node build",
+    "dev": "n8n-node dev",
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix",
+    "scan": "npx -y @n8n/scan-community-package .",
+    "release": "n8n-node release",
+    "prepublishOnly": "n8n-node prerelease"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
+    "nodes": [
+      "dist/nodes/TruthBear/TruthBear.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@n8n/node-cli": "*",
+    "typescript": "5.9.3"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

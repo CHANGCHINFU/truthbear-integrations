@@ -1,0 +1,35 @@
+# DO NOT EDIT — generated from truth/ by scripts/gen.mjs
+# truth-sha: a8b6a66c771c3193
+# Edit truth/service.json or truth/tools.json instead, then run: node scripts/gen.mjs
+
+version: 0.0.1
+type: plugin
+author: changchinfu
+name: truthbear
+label:
+  en_US: "Truth Bear"
+description:
+  en_US: "Truth Bear returns official-source records for AI agents: every record carries the official source URL, a record_hash you can recompute offline, a freshness stamp, and a did:key signature."
+icon: icon.svg
+tags:
+  - utilities
+  - search
+resource:
+  memory: 1048576
+  permission:
+    tool:
+      enabled: true
+plugins:
+  tools:
+    - provider/truthbear.yaml
+meta:
+  version: 0.0.1
+  arch:
+    - amd64
+    - arm64
+  runner:
+    language: python
+    version: '3.12'
+    entrypoint: main
+privacy: PRIVACY.md
+repo: https://github.com/CHANGCHINFU/mcp-gauge

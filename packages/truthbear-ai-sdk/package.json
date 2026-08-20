@@ -1,0 +1,63 @@
+{
+  "name": "truthbear-ai-sdk",
+  "version": "0.1.0",
+  "description": "Official-source records for AI agents: every record carries the source URL, an offline-recomputable record_hash, a freshness stamp and a did:key signature. Free lookups need no key; paid records return a live x402 payment challenge.",
+  "keywords": [
+    "ai-sdk",
+    "vercel-ai-sdk",
+    "tools",
+    "mcp",
+    "x402",
+    "official-data",
+    "provenance",
+    "verification"
+  ],
+  "license": "MIT",
+  "author": "changchinfu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CHANGCHINFU/mcp-gauge.git"
+  },
+  "homepage": "https://truthbear.co",
+  "bugs": {
+    "url": "https://github.com/CHANGCHINFU/mcp-gauge/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "node --test test/*.test.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "ai": ">=4",
+    "zod": ">=3.23"
+  },
+  "devDependencies": {
+    "ai": "^7.0.70",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "zod": "^4.4.3"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

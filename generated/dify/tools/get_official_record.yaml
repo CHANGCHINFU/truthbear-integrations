@@ -1,0 +1,45 @@
+# DO NOT EDIT — generated from truth/ by scripts/gen.mjs
+# truth-sha: a8b6a66c771c3193
+# Edit truth/service.json or truth/tools.json instead, then run: node scripts/gen.mjs
+
+identity:
+  name: get_official_record
+  author: changchinfu
+  label:
+    en_US: "Get an official record"
+  icon: icon.svg
+description:
+  human:
+    en_US: "Returns the REAL x402 payment challenge (accepts[]: network / asset / payTo / amount) for the paid endpoint that serves a given signal_id+entity. This tool does NOT deliver paid data and does NOT take payment - MCP has no payment layer. Pay"
+  llm: "Returns the REAL x402 payment challenge (accepts[]: network / asset / payTo / amount) for the paid endpoint that serves a given signal_id+entity. This tool does NOT deliver paid data and does NOT take payment - MCP has no payment layer. Pay at the returned url with your own x402 client (USDC on Base or Solana, gasless EIP-3009; pay from a plain EOA) and you receive the record directly, with record_hash you can verify offline. This tool only fetches the 402 challenge; it delivers no paid data and collects no payment."
+parameters:
+  - name: signal_id
+    type: string
+    required: true
+    form: llm
+    label:
+      en_US: "signal_id"
+    human_description:
+      en_US: "which signal line, e.g. hydrology.river-level - use find_signal to list them"
+    llm_description: "which signal line, e.g. hydrology.river-level - use find_signal to list them"
+  - name: entity
+    type: string
+    required: true
+    form: llm
+    label:
+      en_US: "entity"
+    human_description:
+      en_US: "which object within that line, e.g. the USGS site id 07010000"
+    llm_description: "which object within that line, e.g. the USGS site id 07010000"
+  - name: dim
+    type: string
+    required: false
+    form: llm
+    label:
+      en_US: "dim"
+    human_description:
+      en_US: "which product: full read (gauge) or a single add-on; the price of each is in the 402 challenge this tool returns, never here"
+    llm_description: "which product: full read (gauge) or a single add-on; the price of each is in the 402 challenge this tool returns, never here"
+extra:
+  python:
+    source: tools/get_official_record.py

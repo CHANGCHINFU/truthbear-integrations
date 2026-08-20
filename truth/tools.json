@@ -1,0 +1,79 @@
+{
+  "_comment": "DO NOT hand-edit tool text. Refresh from the live server.",
+  "pulled_from": "POST https://api.truthbear.co/mcp -> tools/list",
+  "tools": [
+    {
+      "name": "verify_citation",
+      "description": "FREE. Given a record_hash from any Truth Bear record, look it up and recompute the canonical hash server-side, returning whether it is a genuine Truth Bear official record plus a plain-language reverse lookup of what exactly that hash attests. Use this to check a citation you were handed by another agent or document BEFORE relying on it. No payment, no API key.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "record_hash": {
+            "type": "string",
+            "description": "sha256:<64 hex>, or a >=8-hex prefix as posted publicly"
+          }
+        },
+        "required": [
+          "record_hash"
+        ]
+      }
+    },
+    {
+      "name": "find_signal",
+      "description": "FREE coverage + freshness manifest: which signal_id lines exist, how many entities each covers, and fresh/recent/stale counts - so you can check \"is my entity covered and how fresh\" BEFORE paying. Optional filters: industry, signal_id, entity.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "industry": {
+            "type": "string",
+            "description": "restrict to one domain, e.g. hydrology, agriculture, energy"
+          },
+          "signal_id": {
+            "type": "string",
+            "description": "e.g. hydrology.river-level"
+          },
+          "entity": {
+            "type": "string",
+            "description": "object id, e.g. a USGS site id"
+          },
+          "full": {
+            "type": "boolean",
+            "description": "true = per-entity detail (larger); default compact summary"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_official_record",
+      "description": "Returns the REAL x402 payment challenge (accepts[]: network / asset / payTo / amount) for the paid endpoint that serves a given signal_id+entity. This tool does NOT deliver paid data and does NOT take payment - MCP has no payment layer. Pay at the returned url with your own x402 client (USDC on Base or Solana, gasless EIP-3009; pay from a plain EOA) and you receive the record directly, with record_hash you can verify offline. This tool only fetches the 402 challenge; it delivers no paid data and collects no payment.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "signal_id": {
+            "type": "string",
+            "description": "which signal line, e.g. hydrology.river-level - use find_signal to list them"
+          },
+          "entity": {
+            "type": "string",
+            "description": "which object within that line, e.g. the USGS site id 07010000"
+          },
+          "dim": {
+            "type": "string",
+            "enum": [
+              "gauge",
+              "ruler",
+              "calibrated",
+              "strata",
+              "history"
+            ],
+            "description": "which product: full read (gauge) or a single add-on; the price of each is in the 402 challenge this tool returns, never here"
+          }
+        },
+        "required": [
+          "signal_id",
+          "entity"
+        ]
+      }
+    }
+  ]
+}
