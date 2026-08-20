@@ -434,7 +434,10 @@ emit(`${N8N_NODE_DIR}/package.json`, JSON.stringify({
   },
   devDependencies: { '@n8n/node-cli': '*', typescript: '5.9.3' },
   peerDependencies: { 'n8n-workflow': '*' },
-  publishConfig: { access: 'public', provenance: true },
+  // provenance 不寫在這裡:官方文件明寫「When you publish using trusted publishing from
+  //   GitHub Actions… npm automatically generates and publishes provenance attestations】,
+  //   而【本機首發】沒有 OIDC,寫了會直接失敗。
+  publishConfig: { access: 'public' },
 }, null, 2));
 
 // ★照官方 n8n-nodes-starter 的 tsconfig 原樣(它是【獨立設定】,
@@ -457,6 +460,9 @@ emit(`${N8N_NODE_DIR}/tsconfig.json`, JSON.stringify({
     esModuleInterop: true,
     resolveJsonModule: true,
     incremental: true,
+    // ★把建置快取檔移出 dist —— 它本來會被一起打包發上 npm
+    //   (dry-run 量到 203.6kB,佔整包 90%）,而它對使用者沒有任何用處。
+    tsBuildInfoFile: './.tsbuildinfo',
     declaration: true,
     sourceMap: true,
     skipLibCheck: true,
