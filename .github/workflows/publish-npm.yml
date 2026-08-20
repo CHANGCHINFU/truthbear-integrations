@@ -44,10 +44,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ★2026-08-20: node-version was 22, which bundles npm 10.x, and npm 10 has no OIDC support
+      #   at all. It ignored the trusted publisher, fell back to the placeholder token that
+      #   setup-node writes into .npmrc, and the registry answered 404. npm's own requirement is
+      #   "npm CLI version 11.5.1 or later and Node version 22.14.0 or higher"; the official
+      #   example workflow pins Node 24, so this does too.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
+
+      # Pinning Node still leaves the npm version up to whatever that Node bundle happens to
+      # ship, which is a fact about a runner image and can change without us. So upgrade
+      # explicitly, then assert - an npm too old to speak OIDC does not error, it quietly
+      # publishes with a token instead, and that is the failure we just spent a run finding.
+      - name: npm new enough to speak OIDC
+        run: |
+          npm install -g npm@latest
+          HAVE="$(npm --version)"
+          echo "npm $HAVE"
+          node -e '
+            const need = "11.5.1", have = process.argv[1];
+            const cmp = (a, b) => {
+              const A = a.split(".").map(Number), B = b.split(".").map(Number);
+              for (let i = 0; i < 3; i++) if (A[i] !== B[i]) return A[i] - B[i];
+              return 0;
+            };
+            if (cmp(have, need) < 0) {
+              console.error(`npm ${have} cannot use trusted publishing (needs >= ${need}). Refusing to publish, because this version would silently fall back to token auth.`);
+              process.exit(1);
+            }
+          ' "$HAVE"
 
       # Resolve the target once, so the tag and the input cannot disagree later in the job.
       - name: Resolve package
