@@ -1,7 +1,7 @@
 {
   "name": "truthbear-ai-sdk",
-  "version": "0.1.0",
-  "description": "Official-source records for AI agents: every record carries the source URL, an offline-recomputable record_hash, a freshness stamp and a did:key signature. Free lookups need no key; paid records return a live x402 payment challenge.",
+  "version": "0.1.1",
+  "description": "Official-source records for AI agents: source URL, an offline-recomputable record_hash, freshness and a did:key signature. Free lookups need no key; the paid tool returns a live x402 payment challenge and never charges silently.",
   "keywords": [
     "ai-sdk",
     "vercel-ai-sdk",
@@ -16,11 +16,11 @@
   "author": "changchinfu",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/CHANGCHINFU/mcp-gauge.git"
+    "url": "https://github.com/CHANGCHINFU/truthbear-integrations.git"
   },
   "homepage": "https://truthbear.co",
   "bugs": {
-    "url": "https://github.com/CHANGCHINFU/mcp-gauge/issues"
+    "url": "https://github.com/CHANGCHINFU/truthbear-integrations/issues"
   },
   "type": "module",
   "main": "./dist/index.js",
@@ -43,8 +43,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "test": "node --test test/*.test.mjs",
-    "prepublishOnly": "npm run build"
+    "test": "node --test test/*.test.mjs"
   },
   "peerDependencies": {
     "ai": ">=4",

@@ -772,6 +772,35 @@ export const PAID_TOOLS = ${JSON.stringify(service.paidTools)} as const;
 export const TOOL_SNAPSHOT = ${JSON.stringify(tools.map((t) => ({ name: t.name, description: t.description })), null, 2)} as const;
 `);
 
+// ── 3b2) truthbear-ai-sdk 的 package.json(改成生成物)────────────
+// ★2026-08-20 事故:這份原本是【手寫的】,repository 還指著 mcp-gauge,
+//   而 0.1.0 已經帶著那個錯的欄位發上 npm 了(版本不可變,只能出 0.1.1 修)。
+//   n8n 那包沒事,因為它一開始就是生成的。
+//   ⇒ 凡是「會被發布出去、且含網址」的檔,一律進生成器。手寫就會漂。
+emit('../packages/truthbear-ai-sdk/package.json', JSON.stringify({
+  name: V.packageName,
+  version: '0.1.1',
+  description: 'Official-source records for AI agents: source URL, an offline-recomputable record_hash, freshness and a did:key signature. Free lookups need no key; the paid tool returns a live x402 payment challenge and never charges silently.',
+  keywords: ['ai-sdk', 'vercel-ai-sdk', 'tools', 'mcp', 'x402', 'official-data', 'provenance', 'verification'],
+  license,
+  author: service.npmAuthor,
+  repository: { type: 'git', url: `${distributionRepo}.git` },
+  homepage: humanSite,
+  bugs: { url: `${distributionRepo}/issues` },
+  type: 'module',
+  main: './dist/index.js',
+  module: './dist/index.js',
+  types: './dist/index.d.ts',
+  exports: { '.': { types: './dist/index.d.ts', import: './dist/index.js' } },
+  files: ['dist', 'README.md', 'LICENSE'],
+  sideEffects: false,
+  engines: { node: '>=18' },
+  scripts: { build: 'tsup', test: 'node --test test/*.test.mjs' },
+  peerDependencies: { ai: '>=4', zod: '>=3.23' },
+  devDependencies: { ai: '^7.0.70', tsup: '^8.5.1', typescript: '^5.9.3', zod: '^4.4.3' },
+  publishConfig: { access: 'public' },
+}, null, 2));
+
 // ── 3c) npm 套件的 README(生成,因為它必須帶網址而手寫檔一律禁止帶)──
 emit('../packages/truthbear-ai-sdk/README.md', header('md') + `
 # truthbear-ai-sdk
@@ -945,6 +974,20 @@ npm install ${V.packageName}
 
 ${disclosure}
 `);
+
+// ── 生成清單 ──────────────────────────────────────────────────
+// ★為什麼需要它:判斷「這個檔是不是生成物」原本靠檔頭那行 DO-NOT-EDIT 註解,
+//   但【JSON 不能有註解】—— 於是生成的 package.json 在閘 B 眼裡是手寫檔,
+//   規則就對它誤報。2026-08-20 實際踩到了。
+//   ⇒ 改成由生成器自己吐一份清單,閘 B 直接讀它,不用從內容猜。
+{
+  const manifest = {
+    _comment: 'DO NOT EDIT - written by scripts/gen.mjs. Lists every generated artifact so the gates do not have to guess from file contents (JSON files cannot carry a DO-NOT-EDIT comment).',
+    truthSha: TRUTH_SHA,
+    files: [...out.keys()].map((r) => r.replace(/^\.\.\//, '')).sort(),
+  };
+  out.set('.manifest.json', JSON.stringify(manifest, null, 2) + '\n');
+}
 
 // ── 寫出 / 比對 ────────────────────────────────────────────────
 let changed = 0;

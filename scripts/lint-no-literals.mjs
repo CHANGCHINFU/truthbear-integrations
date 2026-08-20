@@ -15,6 +15,19 @@ import { join, relative, sep } from 'node:path';
 import { service, ROOT } from './truth.mjs';
 
 const GEN_MARK = 'DO NOT EDIT — generated from truth/';
+
+// ★判斷「這個檔是不是生成物」不能只看檔頭那行註解 —— 【JSON 不能有註解】,
+//   所以生成的 package.json 在這道閘眼裡曾經是手寫檔,規則就對它誤報(2026-08-20 踩到)。
+//   ⇒ 改成讀生成器自己吐的清單。清單由 gen.mjs 產出,所以不會有第二份真相。
+const generatedSet = (() => {
+  try {
+    const m = JSON.parse(readFileSync(join(ROOT, 'generated', '.manifest.json'), 'utf8'));
+    return new Set(m.files || []);
+  } catch {
+    // 清單讀不到就【不放行任何東西】—— 寧可誤報也不要因為缺清單而靜默放過。
+    return new Set();
+  }
+})();
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'coverage']);
 const TEXT = /\.(mjs|js|cjs|ts|tsx|json|md|ya?ml|txt|py|toml)$/i;
 
@@ -26,7 +39,15 @@ const EXEMPT = new Map([
   ['truth/tools.json', '真相源本身'],
 ]);
 
+// ★2026-08-20 補:原本只守服務網址,【repo 網址沒進來】——
+//   而 truthbear-ai-sdk 的手寫 package.json 的 repository 就指錯了 repo(指到 mcp-gauge),
+//   帶著那個錯發上 npm 0.1.0(版本不可變,只能出 0.1.1 修)。
+//   n8n 那包沒事,因為它一開始就是生成的。
+//   ⇒ repo 網址跟服務網址一樣是【會漂的事實】,一併納入守備。
 const hosts = [service.canonicalUrl, ...(service.legacyUrls || [])]
+  .map((u) => u.replace(/^https?:\/\//, ''));
+const repoPaths = [service.sourceRepo, service.distributionRepo]
+  .filter(Boolean)
   .map((u) => u.replace(/^https?:\/\//, ''));
 const addrs = [service.chainFacts.payTo, service.chainFacts.asset];
 
@@ -36,6 +57,12 @@ const RULES = [
     everywhere: true,
     re: /\$\s?\d|\bmaxAmountRequired\s*[:=]\s*['"]?\d/,
     why: '價格字面量。價格只能在 runtime 從 402 挑戰讀,不得寫進任何 artifact。',
+  },
+  {
+    id: 'repo-url',
+    everywhere: false,
+    re: new RegExp(repoPaths.map((h) => h.replace(/[./]/g, '\\$&')).join('|')),
+    why: 'repo 網址字面量。要用就 import 生成的常數,或改 truth/service.json 重新生成。',
   },
   {
     id: 'host',
@@ -67,7 +94,8 @@ for (const p of walk(ROOT)) {
   const rel = relative(ROOT, p).split(sep).join('/');
   if (EXEMPT.has(rel)) continue;
   const body = readFileSync(p, 'utf8');
-  const isGenerated = body.includes(GEN_MARK);
+  // 兩種認法都算:①檔頭有 DO-NOT-EDIT 標記 ②在生成器吐的清單上(給 JSON 這種不能帶註解的檔)
+  const isGenerated = body.includes(GEN_MARK) || generatedSet.has(rel);
   scanned++;
   for (const r of RULES) {
     if (!r.everywhere && isGenerated) continue;   // 生成物可以帶網址,但不能帶價格
