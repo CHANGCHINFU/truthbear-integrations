@@ -109,9 +109,31 @@ jobs:
           npm ci || npm install
           npm run build --if-present
 
+      # ★2026-08-20: `--if-present` silently does nothing when the script is absent, and
+      #   n8n-nodes-truthbear has no `test` script - so this step was passing without checking
+      #   anything for that package, under a name that says otherwise. Each package must declare
+      #   which check is its own, and a package that declares neither is a mistake, not a pass.
+      - name: Package checks are actually declared
+        working-directory: packages/${{ steps.pick.outputs.pkg }}
+        run: |
+          HAS_TEST="$(node -p "!!(require('./package.json').scripts||{}).test")"
+          HAS_LINT="$(node -p "!!(require('./package.json').scripts||{}).lint")"
+          echo "test script: $HAS_TEST   lint script: $HAS_LINT"
+          if [ "$HAS_TEST" != "true" ] && [ "$HAS_LINT" != "true" ]; then
+            echo "This package declares neither a test nor a lint script, so this job would"
+            echo "publish it without checking anything. Add one before releasing."
+            exit 1
+          fi
+
       - name: Package contract tests
         working-directory: packages/${{ steps.pick.outputs.pkg }}
         run: npm test --if-present
+
+      # The n8n package's own gate is the official lint (n8n-node lint), not a test suite:
+      # verification is judged against those rules, so they belong in front of the door too.
+      - name: Package lint
+        working-directory: packages/${{ steps.pick.outputs.pkg }}
+        run: npm run lint --if-present
 
       # The tag and package.json must agree, or the registry would carry a version whose name
       # says one thing and whose contents say another - and that cannot be withdrawn.
