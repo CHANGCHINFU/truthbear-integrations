@@ -101,22 +101,47 @@ jobs:
           fi
           echo "Version matches: $HAVE"
 
-      # Two ways in, and the job works with either:
+      # Trusted publishing only. No secret is involved and none may be reintroduced.
       #
-      #   Trusted publishing (preferred). Once a trusted publisher is configured for the package
-      #   on npmjs.com, the OIDC token above is used automatically and provenance is generated
-      #   without any flag. No secret is involved.
+      # ★2026-08-20, why the NODE_AUTH_TOKEN fallback was removed rather than left in place:
+      #   while both a trusted publisher AND a token are configured, a misconfigured trusted
+      #   publisher does not fail - npm quietly falls back to the token and the job goes green.
+      #   The pipeline would then be reporting "publishing works" while proving nothing about
+      #   the path it is supposed to be using. That is exactly the false-green this project
+      #   keeps getting caught by. With the token gone, a broken OIDC setup turns the job red.
       #
-      #   NPM_TOKEN (bootstrap only). A package cannot have a trusted publisher until it exists,
-      #   and it cannot exist until something publishes it first. So the very first release uses
-      #   a granular token from repository secrets. Delete that secret once the trusted publisher
-      #   is in place - npm's own migration guidance is: token first, verify, then revoke.
+      # The bootstrap token that published the first release of each package is revoked; a
+      # package cannot have a trusted publisher until it exists, so the first release had to
+      # use one. npm's migration guidance is: token first, verify, then revoke.
       #
       # Publishing from a laptop is deliberately not an option here: this account carries a
       # security key and no authenticator app, so npm demands an interactive step-up that a
       # non-interactive shell cannot satisfy.
       - name: Publish
         working-directory: packages/${{ steps.pick.outputs.pkg }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
+
+      # ★A publish that succeeded is not the same thing as a publish that carried provenance,
+      #   and the difference is not cosmetic: n8n's verification guidelines require a node to be
+      #   published from a GitHub Action WITH a provenance statement. The first releases of both
+      #   packages went out green and carried none (dist.attestations was null) - nothing in this
+      #   pipeline noticed. So the claim is checked here instead of assumed.
+      #   The registry needs a moment to expose the attestation, hence the retries.
+      - name: Provenance actually attached
+        working-directory: packages/${{ steps.pick.outputs.pkg }}
+        run: |
+          NAME="$(node -p "require('./package.json').name")"
+          VER="$(node -p "require('./package.json').version")"
+          for i in 1 2 3 4 5 6; do
+            ATT="$(npm view "$NAME@$VER" dist.attestations --json 2>/dev/null || echo null)"
+            if [ -n "$ATT" ] && [ "$ATT" != "null" ] && [ "$ATT" != '""' ]; then
+              echo "Provenance present for $NAME@$VER:"
+              echo "$ATT"
+              exit 0
+            fi
+            echo "attempt $i: no attestation visible yet, waiting"
+            sleep 10
+          done
+          echo "Published $NAME@$VER but the registry reports no provenance attestation."
+          echo "That version cannot pass n8n verification. Treating as a failure."
+          exit 1

@@ -410,7 +410,7 @@ const N8N_NODE_DIR = '../packages/n8n-nodes-truthbear';
 
 emit(`${N8N_NODE_DIR}/package.json`, JSON.stringify({
   name: N.packageName,
-  version: '0.1.0',
+  version: '0.1.1',   // 0.1.0 發出去時沒帶 provenance,n8n 驗證要求要有 ⇒ 這一版走 OIDC 重發
   description: 'Official-source records for AI agents: source URL, offline-recomputable record_hash, freshness and a did:key signature. Free lookups plus a live price quote; this node never pays and never takes a key.',
   license,
   homepage: humanSite,
@@ -779,7 +779,7 @@ export const TOOL_SNAPSHOT = ${JSON.stringify(tools.map((t) => ({ name: t.name, 
 //   ⇒ 凡是「會被發布出去、且含網址」的檔,一律進生成器。手寫就會漂。
 emit('../packages/truthbear-ai-sdk/package.json', JSON.stringify({
   name: V.packageName,
-  version: '0.1.1',
+  version: '0.1.2',   // 同上:0.1.1 是 token 發的,沒有 attestation
   description: 'Official-source records for AI agents: source URL, an offline-recomputable record_hash, freshness and a did:key signature. Free lookups need no key; the paid tool returns a live x402 payment challenge and never charges silently.',
   keywords: ['ai-sdk', 'vercel-ai-sdk', 'tools', 'mcp', 'x402', 'official-data', 'provenance', 'verification'],
   license,
